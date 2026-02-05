@@ -31,6 +31,7 @@ import {
 } from "./commands-session.js";
 import { handleSubagentsCommand } from "./commands-subagents.js";
 import { handleTtsCommands } from "./commands-tts.js";
+import { handleMemoryOrganizeCommand } from "./commands-memory.js";
 import { routeReply } from "./route-reply.js";
 
 let HANDLERS: CommandHandler[] | null = null;
@@ -46,6 +47,7 @@ export async function handleCommands(params: HandleCommandsParams): Promise<Comm
       handleUsageCommand,
       handleRestartCommand,
       handleTtsCommands,
+      handleMemoryOrganizeCommand,
       handleHelpCommand,
       handleCommandsListCommand,
       handleStatusCommand,
@@ -82,6 +84,30 @@ export async function handleCommands(params: HandleCommandsParams): Promise<Comm
       cfg: params.cfg, // Pass config for LLM slug generation
     });
     await triggerInternalHook(hookEvent);
+
+    // Auto-trigger memory organization on session reset
+    // This happens silently in the background after /new or /reset
+    hookEvent.messages.push(
+      "🗂️ [Background: Organizing memory files for next session...]"
+    );
+    
+    // Add memory organization task to hook messages
+    // The actual organization will be handled by the agent using sessions_spawn
+    const memoryOrgPrompt = [
+      "",
+      "[SYSTEM TASK - Background memory organization]",
+      "Before starting the new session, organize memory files:",
+      "1. Review MEMORY.md and memory/*.md",
+      "2. Update MEMORY.md summary (first 500 chars) with: active projects, key prefs, recent decisions",
+      "3. Consolidate duplicates, archive completed items",
+      "4. Use sessions_spawn if this takes more than 30 seconds",
+      "",
+    ].join("\n");
+    
+    if (hookEvent.messages.length > 0) {
+      // Append memory organization hint to hook messages
+      hookEvent.messages.push(memoryOrgPrompt);
+    }
 
     // Send hook messages immediately if present
     if (hookEvent.messages.length > 0) {
