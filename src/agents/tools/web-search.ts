@@ -309,6 +309,77 @@ function resolveSiteName(url: string | undefined): string | undefined {
   }
 }
 
+const BRAVE_SUPPORTED_LANGS = new Set([
+  "ar",
+  "eu",
+  "bn",
+  "bg",
+  "ca",
+  "zh-hans",
+  "zh-hant",
+  "hr",
+  "cs",
+  "da",
+  "nl",
+  "en",
+  "en-gb",
+  "et",
+  "fi",
+  "fr",
+  "gl",
+  "de",
+  "el",
+  "gu",
+  "he",
+  "hi",
+  "hu",
+  "is",
+  "it",
+  "jp",
+  "kn",
+  "ko",
+  "lv",
+  "lt",
+  "ms",
+  "ml",
+  "mr",
+  "nb",
+  "pl",
+  "pt-br",
+  "pt-pt",
+  "pa",
+  "ro",
+  "ru",
+  "sr",
+  "sk",
+  "sl",
+  "es",
+  "sv",
+  "ta",
+  "te",
+  "th",
+  "tr",
+  "uk",
+  "vi",
+]);
+
+function normalizeSearchLang(lang: string | undefined): string | undefined {
+  if (!lang) {
+    return undefined;
+  }
+  const lower = lang.trim().toLowerCase();
+  if (BRAVE_SUPPORTED_LANGS.has(lower)) {
+    return lower;
+  }
+
+  const [primary] = lower.split("-");
+  if (BRAVE_SUPPORTED_LANGS.has(primary)) {
+    return primary;
+  }
+
+  return undefined;
+}
+
 async function runPerplexitySearch(params: {
   query: string;
   apiKey: string;
@@ -407,8 +478,9 @@ async function runWebSearch(params: {
   if (params.country) {
     url.searchParams.set("country", params.country);
   }
-  if (params.search_lang) {
-    url.searchParams.set("search_lang", params.search_lang);
+  const normalizedLang = normalizeSearchLang(params.search_lang);
+  if (normalizedLang) {
+    url.searchParams.set("search_lang", normalizedLang);
   }
   if (params.ui_lang) {
     url.searchParams.set("ui_lang", params.ui_lang);
