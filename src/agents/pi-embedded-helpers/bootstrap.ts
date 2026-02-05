@@ -84,6 +84,7 @@ export function stripThoughtSignatures<T>(
 export const DEFAULT_BOOTSTRAP_MAX_CHARS = 20_000;
 const BOOTSTRAP_HEAD_RATIO = 0.7;
 const BOOTSTRAP_TAIL_RATIO = 0.2;
+const MEMORY_SUMMARY_MAX_CHARS = 500; // Only inject first ~500 chars of MEMORY.md
 
 type TrimBootstrapResult = {
   content: string;
@@ -91,6 +92,38 @@ type TrimBootstrapResult = {
   maxChars: number;
   originalLength: number;
 };
+
+/**
+ * Extract summary section from MEMORY.md (first section before "---" or first ~500 chars).
+ * Full memory is searchable via memory_search tool, so we only inject a brief summary.
+ */
+function extractMemorySummary(content: string, maxChars: number = MEMORY_SUMMARY_MAX_CHARS): string {
+  const trimmed = content.trim();
+  
+  // Look for markdown separator (---) which indicates end of summary section
+  const separatorIndex = trimmed.indexOf('\n---');
+  if (separatorIndex > 0 && separatorIndex < maxChars * 2) {
+    // Found separator within reasonable distance, use content before it
+    const summary = trimmed.slice(0, separatorIndex).trim();
+    if (summary.length <= maxChars) {
+      return summary;
+    }
+  }
+  
+  // No separator found or summary is too long, just take first maxChars
+  if (trimmed.length <= maxChars) {
+    return trimmed;
+  }
+  
+  // Truncate at maxChars, try to break at newline
+  let truncated = trimmed.slice(0, maxChars);
+  const lastNewline = truncated.lastIndexOf('\n');
+  if (lastNewline > maxChars * 0.7) {
+    truncated = truncated.slice(0, lastNewline);
+  }
+  
+  return truncated + '\n\n[Full memory searchable via memory_search tool]';
+}
 
 export function resolveBootstrapMaxChars(cfg?: OpenClawConfig): number {
   const raw = cfg?.agents?.defaults?.bootstrapMaxChars;
@@ -173,7 +206,24 @@ export function buildBootstrapContextFiles(
       });
       continue;
     }
-    const trimmed = trimBootstrapContent(file.content ?? "", file.name, maxChars);
+    
+    // Special handling for MEMORY.md: only inject summary section
+    const isMemoryFile = file.name.toLowerCase() === 'memory.md';
+    let contentToInject = file.content ?? "";
+    
+    if (isMemoryFile && contentToInject) {
+      contentToInject = extractMemorySummary(contentToInject, MEMORY_SUMMARY_MAX_CHARS);
+      // Don't apply further trimming to memory summary
+      if (contentToInject) {
+        result.push({
+          path: file.name,
+          content: contentToInject,
+        });
+      }
+      continue;
+    }
+    
+    const trimmed = trimBootstrapContent(contentToInject, file.name, maxChars);
     if (!trimmed.content) {
       continue;
     }

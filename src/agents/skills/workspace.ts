@@ -1,10 +1,31 @@
 import {
-  formatSkillsForPrompt,
   loadSkillsFromDir,
   type Skill,
 } from "@mariozechner/pi-coding-agent";
 import fs from "node:fs";
 import path from "node:path";
+
+// Custom YAML formatter - more compact than XML (saves ~7-8 tokens per skill)
+function formatSkillsForPromptYaml(skills: Skill[]): string {
+  if (skills.length === 0) {
+    return "";
+  }
+  const escapeYaml = (str: string) => {
+    // Escape quotes and use quotes if contains special chars
+    if (/[:\n\r\t"'{}\[\]|>@`]/.test(str)) {
+      return `"${str.replace(/"/g, '\\"')}"`;
+    }
+    return str;
+  };
+  const lines = ["skills:"];
+  for (const skill of skills) {
+    const location = skill.filePath || `skills/${skill.name}/SKILL.md`;
+    lines.push(`  - name: ${escapeYaml(skill.name)}`);
+    lines.push(`    description: ${escapeYaml(skill.description)}`);
+    lines.push(`    location: ${escapeYaml(location)}`);
+  }
+  return lines.join("\n");
+}
 import type { OpenClawConfig } from "../../config/config.js";
 import type {
   ParsedSkillFrontmatter,
@@ -213,7 +234,7 @@ export function buildWorkspaceSkillSnapshot(
   );
   const resolvedSkills = promptEntries.map((entry) => entry.skill);
   const remoteNote = opts?.eligibility?.remote?.note?.trim();
-  const prompt = [remoteNote, formatSkillsForPrompt(resolvedSkills)].filter(Boolean).join("\n");
+  const prompt = [remoteNote, formatSkillsForPromptYaml(resolvedSkills)].filter(Boolean).join("\n");
   return {
     prompt,
     skills: eligible.map((entry) => ({
@@ -248,7 +269,7 @@ export function buildWorkspaceSkillsPrompt(
     (entry) => entry.invocation?.disableModelInvocation !== true,
   );
   const remoteNote = opts?.eligibility?.remote?.note?.trim();
-  return [remoteNote, formatSkillsForPrompt(promptEntries.map((entry) => entry.skill))]
+  return [remoteNote, formatSkillsForPromptYaml(promptEntries.map((entry) => entry.skill))]
     .filter(Boolean)
     .join("\n");
 }

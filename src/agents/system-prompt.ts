@@ -27,8 +27,8 @@ function buildSkillsSection(params: {
   }
   return [
     "## Skills (mandatory)",
-    "Before replying: scan <available_skills> <description> entries.",
-    `- If exactly one skill clearly applies: read its SKILL.md at <location> with \`${params.readToolName}\`, then follow it.`,
+    "Before replying: scan skills list below for relevant name/description.",
+    `- If exactly one skill clearly applies: read its SKILL.md at 'location' with \`${params.readToolName}\`, then follow it.`,
     "- If multiple could apply: choose the most specific one, then read/follow it.",
     "- If none clearly apply: do not read any SKILL.md.",
     "Constraints: never read more than one skill up front; only read after selecting.",
@@ -144,21 +144,8 @@ function buildVoiceSection(params: { isMinimal: boolean; ttsHint?: string }) {
 }
 
 function buildDocsSection(params: { docsPath?: string; isMinimal: boolean; readToolName: string }) {
-  const docsPath = params.docsPath?.trim();
-  if (!docsPath || params.isMinimal) {
-    return [];
-  }
-  return [
-    "## Documentation",
-    `OpenClaw docs: ${docsPath}`,
-    "Mirror: https://docs.openclaw.ai",
-    "Source: https://github.com/openclaw/openclaw",
-    "Community: https://discord.com/invite/clawd",
-    "Find new skills: https://clawhub.com",
-    "For OpenClaw behavior, commands, config, or architecture: consult local docs first.",
-    "When diagnosing issues, run `openclaw status` yourself when possible; only ask the user if you lack access (e.g., sandboxed).",
-    "",
-  ];
+  // DISABLED: Documentation references removed to reduce token usage for local models
+  return [];
 }
 
 export function buildAgentSystemPrompt(params: {
@@ -364,12 +351,37 @@ export function buildAgentSystemPrompt(params: {
     availableTools,
     citationsMode: params.memoryCitationsMode,
   });
-  const docsSection = buildDocsSection({
-    docsPath: params.docsPath,
-    isMinimal,
-    readToolName,
-  });
+  // DISABLED: Documentation section removed to reduce token usage
+  // const docsSection = buildDocsSection({
+  //   docsPath: params.docsPath,
+  //   isMinimal,
+  //   readToolName,
+  // });
   const workspaceNotes = (params.workspaceNotes ?? []).map((note) => note.trim()).filter(Boolean);
+
+  // For "micro" mode, return ultra-minimal prompt for local models
+  if (promptMode === "micro") {
+    const microTools = [];
+    if (availableTools.has("read")) microTools.push("- read: Read file contents");
+    if (availableTools.has("write")) microTools.push("- write: Create or overwrite files");
+    if (availableTools.has("edit")) microTools.push("- edit: Edit existing files");
+    if (availableTools.has("exec")) microTools.push("- exec: Run shell commands");
+    if (availableTools.has("ls")) microTools.push("- ls: List directory contents");
+    if (availableTools.has("grep")) microTools.push("- grep: Search file contents");
+    if (availableTools.has("memory_search")) microTools.push("- memory_search: Search memory files");
+    if (availableTools.has("memory_get")) microTools.push("- memory_get: Get specific memory lines");
+    
+    return [
+      "You are a coding assistant.",
+      "",
+      "Tools:",
+      ...microTools,
+      "",
+      `Workspace: ${params.workspaceDir}`,
+      "",
+      "Be concise. No narration unless task is complex.",
+    ].join("\n");
+  }
 
   // For "none" mode, return just the basic identity line
   if (promptMode === "none") {
@@ -453,7 +465,8 @@ export function buildAgentSystemPrompt(params: {
     "Treat this directory as the single global workspace for file operations unless explicitly instructed otherwise.",
     ...workspaceNotes,
     "",
-    ...docsSection,
+    // DISABLED: Documentation section removed to reduce token usage
+    // ...docsSection,
     params.sandboxInfo?.enabled ? "## Sandbox" : "",
     params.sandboxInfo?.enabled
       ? [
